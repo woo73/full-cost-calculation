@@ -95,7 +95,11 @@ export const App = () => {
   }, [authenticated]);
 
   const activeScenario = scenarios.find((scenario) => scenario.id === activeId) ?? scenarios[0];
-  const result = useMemo(() => calculateScenario(activeScenario), [activeScenario]);
+  const result = useMemo(() => {
+    // 数据加载完成前 activeScenario 为 undefined，跳过计算
+    if (!activeScenario) return undefined as unknown as ReturnType<typeof calculateScenario>;
+    return calculateScenario(activeScenario);
+  }, [activeScenario]);
 
   useEffect(() => {
     if (!authenticated || loading || scenarios.length === 0) return;
