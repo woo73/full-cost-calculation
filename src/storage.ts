@@ -2,6 +2,8 @@ import { supabase } from './supabaseClient';
 import type { Scenario } from './types';
 import { defaultParameters } from './constants';
 
+const LOCALSTORAGE_KEY = 'full-cost-calculation:scenarios';
+
 const normalizeScenario = (scenario: Scenario): Scenario => ({
   ...scenario,
   parameters: {
@@ -54,7 +56,40 @@ export const loadScenarios = async (): Promise<Scenario[]> => {
     .order('data->updatedAt', { ascending: false });
 
   if (error || !data) return [];
-  return data.map((row) => normalizeScenario(row.data as Scenario));
+  const supabaseScenarios = data.map((row) => normalizeScenario(row.data as Scenario));
+
+  // 尝试从旧的 localStorage 迁移数据（合并到 Supabase）
+  const localScenarios = loadLocalScenarios();
+  if (localScenarios.length > 0) {
+    await migrateToSupabase(localScenarios);
+    localStorage.removeItem(LOCALSTORAGE_KEY);
+    // 合并：localStorage 中的方案优先（更新更及时），再追加 Supabase 中不重复的
+    const localIds = new Set(localScenarios.map((s) => s.id));
+    const extras = supabaseScenarios.filter((s) => !localIds.has(s.id));
+    return [...localScenarios, ...extras];
+  }
+
+  return supabaseScenarios;
+};
+
+const loadLocalScenarios = (): Scenario[] => {
+  try {
+    const raw = localStorage.getItem(LOCALSTORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(normalizeScenario) : [];
+  } catch {
+    return [];
+  }
+};
+
+const migrateToSupabase = async (scenarios: Scenario[]) => {
+  const rows = scenarios.map((s) => ({
+    id: s.id,
+    data: s,
+    updated_at: new Date().toISOString(),
+  }));
+  await supabase.from('scenarios').upsert(rows, { onConflict: 'id' });
 };
 
 export const saveScenarios = async (scenarios: Scenario[]) => {
