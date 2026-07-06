@@ -359,3 +359,71 @@ td select {
     grid-template-columns: 1fr;
   }
 }
+
+/* ======== 密码入口 ======== */
+.password-gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1d2d44 0%, #2d4a6e 100%);
+}
+
+.password-gate form {
+  background: #fff;
+  border-radius: 12px;
+  padding: 48px 40px 40px;
+  width: 360px;
+  max-width: 90vw;
+  display: grid;
+  gap: 12px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.password-gate h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  color: #1d2d44;
+}
+
+.password-gate p {
+  margin: 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.password-gate input {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 18px;
+  padding: 10px;
+  letter-spacing: 4px;
+}
+
+.password-gate button {
+  background: #1d2d44;
+  color: #fff;
+  border: none;
+  padding: 10px;
+  font-size: 15px;
+}
+
+.password-gate button:hover:not(:disabled) {
+  background: #2d4a6e;
+}
+
+.pw-error {
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.loading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: #667085;
+  font-size: 16px;
+}

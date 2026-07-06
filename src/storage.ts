@@ -1,18 +1,6 @@
+import { supabase } from './supabaseClient';
 import type { Scenario } from './types';
 import { defaultParameters } from './constants';
-
-const storageKey = 'full-cost-calculation:scenarios';
-
-export const loadScenarios = (): Scenario[] => {
-  const raw = localStorage.getItem(storageKey);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(normalizeScenario) : [];
-  } catch {
-    return [];
-  }
-};
 
 const normalizeScenario = (scenario: Scenario): Scenario => ({
   ...scenario,
@@ -43,12 +31,12 @@ const normalizeScenario = (scenario: Scenario): Scenario => ({
       (item.name.includes('自有人工')
         ? 'internalLaborTaxRate'
         : item.name.includes('销售')
-        ? 'salesFeeRate'
-        : item.name.includes('财务')
-          ? 'financeFeeRate'
-          : item.calculationMode === 'revenue_rate'
-            ? 'managementFeeRate'
-            : 'outsourcingVatRate'),
+          ? 'salesFeeRate'
+          : item.name.includes('财务')
+            ? 'financeFeeRate'
+            : item.calculationMode === 'revenue_rate'
+              ? 'managementFeeRate'
+              : 'outsourcingVatRate'),
   })),
   revenues: scenario.revenues.map((item) => ({
     ...item,
@@ -59,6 +47,43 @@ const normalizeScenario = (scenario: Scenario): Scenario => ({
   })),
 });
 
-export const saveScenarios = (scenarios: Scenario[]) => {
-  localStorage.setItem(storageKey, JSON.stringify(scenarios));
+export const loadScenarios = async (): Promise<Scenario[]> => {
+  const { data, error } = await supabase
+    .from('scenarios')
+    .select('data')
+    .order('data->updatedAt', { ascending: false });
+
+  if (error || !data) return [];
+  return data.map((row) => normalizeScenario(row.data as Scenario));
+};
+
+export const saveScenarios = async (scenarios: Scenario[]) => {
+  const { data: existing } = await supabase.from('scenarios').select('id');
+  const existingIds = new Set((existing ?? []).map((r) => r.id));
+  const newIds = new Set(scenarios.map((s) => s.id));
+
+  const toRemove = [...existingIds].filter((id) => !newIds.has(id));
+  if (toRemove.length > 0) {
+    await supabase.from('scenarios').delete().in('id', toRemove);
+  }
+
+  if (scenarios.length === 0) return;
+
+  const rows = scenarios.map((s) => ({
+    id: s.id,
+    data: s,
+    updated_at: new Date().toISOString(),
+  }));
+
+  await supabase.from('scenarios').upsert(rows, { onConflict: 'id' });
+};
+
+export const verifyPassword = async (password: string): Promise<boolean> => {
+  const { data } = await supabase
+    .from('app_config')
+    .select('value')
+    .eq('key', 'entry_password')
+    .single();
+
+  return data?.value === password;
 };

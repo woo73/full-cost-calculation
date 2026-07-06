@@ -5,7 +5,7 @@ import { categoryLabels, costRateLabels, modeLabels } from './constants';
 import { exportScenarioAsExcel } from './exportService';
 import { formatMoney, formatPercent } from './formatters';
 import { cloneScenario, createScenario } from './scenarioFactory';
-import { loadScenarios, saveScenarios } from './storage';
+import { loadScenarios, saveScenarios, verifyPassword } from './storage';
 import type {
   CalculationParameters,
   CostCategory,
@@ -79,18 +79,29 @@ const touch = (scenario: Scenario): Scenario => ({
 });
 
 export const App = () => {
-  const [scenarios, setScenarios] = useState<Scenario[]>(() => {
-    const stored = loadScenarios();
-    return stored.length > 0 ? stored : [createScenario()];
-  });
-  const [activeId, setActiveId] = useState(() => scenarios[0]?.id ?? '');
+  const [authenticated, setAuthenticated] = useState(() => sessionStorage.getItem('fcc_auth') === 'true');
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeId, setActiveId] = useState('');
+
+  useEffect(() => {
+    if (!authenticated) return;
+    loadScenarios().then((stored) => {
+      const list = stored.length > 0 ? stored : [createScenario()];
+      setScenarios(list);
+      setActiveId(list[0]?.id ?? '');
+      setLoading(false);
+    });
+  }, [authenticated]);
 
   const activeScenario = scenarios.find((scenario) => scenario.id === activeId) ?? scenarios[0];
   const result = useMemo(() => calculateScenario(activeScenario), [activeScenario]);
 
   useEffect(() => {
-    saveScenarios(scenarios);
-  }, [scenarios]);
+    if (!authenticated || loading || scenarios.length === 0) return;
+    const timer = setTimeout(() => saveScenarios(scenarios), 300);
+    return () => clearTimeout(timer);
+  }, [scenarios, loading, authenticated]);
 
   const updateActive = (updater: (scenario: Scenario) => Scenario) => {
     setScenarios((current) =>
@@ -189,6 +200,9 @@ export const App = () => {
     }));
   };
 
+  if (!authenticated) return <PasswordGate onSuccess={() => setAuthenticated(true)} />;
+  if (loading || scenarios.length === 0) return <div className="app-shell"><div className="loading">加载中...</div></div>;
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -227,7 +241,7 @@ export const App = () => {
                 }))
               }
             />
-            <p>本地保存 · 最后更新 {new Date(activeScenario.updatedAt).toLocaleString('zh-CN')}</p>
+            <p>云端保存 · 最后更新 {new Date(activeScenario.updatedAt).toLocaleString('zh-CN')}</p>
           </div>
           <div className="actions">
             <button type="button" onClick={duplicateScenario}>复制</button>
@@ -384,6 +398,50 @@ export const App = () => {
         </div>
       </section>
     </main>
+  );
+};
+
+const PasswordGate = ({ onSuccess }: { onSuccess: () => void }) => {
+  const [value, setValue] = useState('');
+  const [error, setError] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async () => {
+    setBusy(true);
+    setError(false);
+    const ok = await verifyPassword(value);
+    if (ok) {
+      sessionStorage.setItem('fcc_auth', 'true');
+      onSuccess();
+    } else {
+      setError(true);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="password-gate">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit();
+        }}
+      >
+        <h1>全成本测算</h1>
+        <p>请输入访问密码</p>
+        <input
+          type="password"
+          value={value}
+          placeholder="请输入密码"
+          onChange={(e) => setValue(e.target.value)}
+          autoFocus
+        />
+        {error && <span className="pw-error">密码错误，请重试</span>}
+        <button type="submit" disabled={busy || !value}>
+          {busy ? '验证中...' : '进入系统'}
+        </button>
+      </form>
+    </div>
   );
 };
 
